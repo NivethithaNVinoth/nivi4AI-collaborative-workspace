@@ -1,4 +1,4 @@
----
+﻿---
 name: prd
 domain: product-management
 description: Build a structured Product Requirements Document connecting problem, users, solution, scope, and success metrics.
@@ -10,7 +10,7 @@ stage: requirements
 
 ## Purpose
 Move from scattered notes to a single source of truth that aligns stakeholders and gives
-engineering enough context to build the right thing. A living document, not a waterfall spec.
+engineering enough context to build the right thing.
 
 ## Steps
 1. Problem & why now: the customer problem and the business case.
@@ -22,7 +22,7 @@ engineering enough context to build the right thing. A living document, not a wa
 
 ## Output template
 ```
-# <Feature/Product> — PRD
+# <Feature/Product> PRD
 ## 1. Problem & why now
 ## 2. Target users & jobs-to-be-done
 ## 3. Goals / Non-goals
