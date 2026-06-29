@@ -4,9 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MODE, MODEL } from './anthropic.mjs';
 import { loadSkills, DOMAINS } from './skills.mjs';
-import { listProjects, getProject, createProject, addStakeholder, removeStakeholder } from './store.mjs';
+import { listProjects, getProject, createProject, addStakeholder, removeStakeholder, addDecision, addSignOff, getDashboard } from './store.mjs';
 import { listArtifacts, readArtifact, listSessions } from './workspace.mjs';
-import { runSuperAgent } from './superAgent.mjs';
+import { runSuperAgent, runPlanAgent } from './superAgent.mjs';
 import {
   assignArtifact, submitReview, getWorkflow,
   getMyTasks, getItemByArtifact,
@@ -79,7 +79,8 @@ app.post('/api/projects/:id/invoke-stream', (req, res) => {
 
   const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
-  runSuperAgent({ projectId: req.params.id, message, onEvent: send })
+  const user = req.body.user || null;
+  runSuperAgent({ projectId: req.params.id, message, user, onEvent: send })
     .catch(e => { send('error', { message: e.message }); })
     .finally(() => res.end());
 });

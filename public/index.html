@@ -42,10 +42,7 @@
       <div class="sidebar-label">Projects</div>
       <ul id="projectList" class="proj-list"></ul>
     </div>
-    <div class="sidebar-section" style="margin-top:auto">
-      <div class="sidebar-label">Skill Registry <span id="skillCount" class="skill-count"></span></div>
-      <div id="skillList" class="skill-list"></div>
-    </div>
+
   </aside>
 
   <!-- ─── CENTER: EXECUTION LOG ─── -->
@@ -58,6 +55,28 @@
       <button class="btn-primary" id="emptyNewProjectBtn">+ Create your first project</button>
     </div>
     <div class="exec-view" id="execView" hidden>
+      <!-- Plan Approval Bar (shown after plan generation, before execution) -->
+      <div class="plan-approval-bar" id="planApprovalBar" hidden>
+        <div class="plan-approval-content">
+          <div class="plan-approval-icon">📋</div>
+          <div class="plan-approval-text">
+            <strong id="planApprovalIntent"></strong>
+            <span id="planApprovalSummary"></span>
+          </div>
+        </div>
+        <div class="plan-approval-actions">
+          <button class="btn-approve-plan" id="approvePlanBtn">✅ Approve &amp; Run</button>
+          <button class="btn-reject-plan" id="rejectPlanBtn">✏️ Modify Plan</button>
+        </div>
+      </div>
+      <!-- Plan rejection feedback (shown when user rejects) -->
+      <div class="plan-reject-bar" id="planRejectBar" hidden>
+        <textarea id="planFeedbackInput" class="field-input" rows="2" placeholder="What changes do you want? e.g. 'Skip the competitive analysis, focus on PRD and user stories'"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="btn-primary" style="font-size:11px;padding:5px 14px" id="resubmitPlanBtn">Regenerate Plan</button>
+          <button class="btn-ghost"   style="font-size:11px;padding:5px 10px" id="cancelRejectBtn">Cancel</button>
+        </div>
+      </div>
       <div class="exec-log" id="execLog">
         <div class="log-welcome" id="logWelcome">
           <div class="log-welcome-icon">✦</div>
@@ -93,6 +112,8 @@
       <button class="panel-tab" data-tab="outputs">Outputs</button>
       <button class="panel-tab" data-tab="collab">Collab <span class="task-badge" id="collabBadge" hidden></span></button>
       <button class="panel-tab" data-tab="team">Team</button>
+      <button class="panel-tab" data-tab="dashboard">Dashboard</button>
+      <button class="panel-tab" data-tab="skills">Skill Hub</button>
     </div>
     <div class="panel-body" id="tabPlan">
       <div class="panel-empty" id="planEmpty"><p>The task plan will appear here when the Super Agent starts working.</p></div>
@@ -122,6 +143,21 @@
         <button id="addStakeBtn" class="btn-secondary">Add</button>
       </div>
       <ul id="stakeList" class="stake-list"></ul>
+    </div>
+
+    <div class="panel-body" id="tabDashboard" hidden style="padding:0;display:flex;flex-direction:column;height:100%">
+      <div class="dashboard-scroll" id="dashboardContent">
+        <div class="panel-empty"><p>Select a project to view its dashboard.</p></div>
+      </div>
+    </div>
+
+    <div class="panel-body" id="tabSkills" hidden style="padding:0;display:flex;flex-direction:column;height:100%">
+      <div class="skill-hub-search">
+        <input type="text" id="skillSearchInput" placeholder="Search skills..." class="field-input" style="width:100%;font-size:11px;padding:6px 10px"/>
+      </div>
+      <div id="skillHubList" class="skill-hub-list">
+        <div class="panel-empty"><p>Loading skill registry...</p></div>
+      </div>
     </div>
   </aside>
 </div>
@@ -265,9 +301,4 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
 <script>
   mermaid.initialize({ startOnLoad: false, theme: 'dark', darkMode: true,
-    themeVariables: { primaryColor: '#2563eb', background: '#161b22', mainBkg: '#1c2230', nodeBorder: '#30363d', titleColor: '#e6edf3', edgeLabelBackground: '#161b22', lineColor: '#8b949e' }
-  });
-</script>
-<script src="app.js"></script>
-</body>
-</html>
+    themeVariabl

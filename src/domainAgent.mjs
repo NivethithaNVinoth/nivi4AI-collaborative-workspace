@@ -88,6 +88,9 @@ function buildMockContent(skill, taskBrief, project, context) {
     'escalation-brief':     mockEscalationBrief,
     'stakeholder-map':      mockStakeholderMap,
     'flowforge':            mockFlowForge,
+    'gantt-chart':          mockGantt,
+    'process-map':          mockProcessMap,
+    'flowchart':            mockFlowchart,
   };
   const fn = builders[skill.name];
   return fn ? fn(ctx, skill) : defaultMock(ctx, skill);
@@ -3004,4 +3007,332 @@ function mockFlowForge(ctx) {
     '| **Confluence** | Insert > draw.io Diagram > paste XML |\n' +
     '| **Jira** | draw.io for Jira attachment > import XML |\n' +
     '| **VS Code** | Install "Draw.io Integration" extension |\n';
+}
+
+
+// =================================================================
+// GANTT CHART -- Uniform 44px rows, status colours, today line
+// =================================================================
+function mockGantt(ctx) {
+  const { product, brand, inr } = ctx;
+  const isHSBC = /hsbc/i.test(brand + ctx.brief + ctx.projectName);
+  const accent = isHSBC ? '#DB0011' : '#c9980e';
+  const accentLight = isHSBC ? '#FDECEA' : '#fef3d0';
+
+  // 12-week project starting today-ish
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const fmt = d => d.toISOString().slice(0, 10);
+  const addW = (d, w) => { const r = new Date(d); r.setDate(r.getDate() + w * 7); return r; };
+
+  const tasks = [
+    { id: 1, name: 'Discovery & Research',    start: addW(start,0), end: addW(start,2), status:'done',        assignee:'Product Owner',   deps:[] },
+    { id: 2, name: 'Market & Competitor Analysis', start: addW(start,1), end: addW(start,3), status:'done',   assignee:'Business Analyst', deps:[1] },
+    { id: 3, name: 'Requirements & PRD',       start: addW(start,3), end: addW(start,5), status:'in-progress', assignee:'Product Owner',   deps:[1,2] },
+    { id: 4, name: 'Stakeholder Sign-off',     start: addW(start,5), end: addW(start,5), status:'not-started', assignee:'Programme Lead',  deps:[3], milestone:true },
+    { id: 5, name: 'UX Design & Prototyping',  start: addW(start,5), end: addW(start,7), status:'not-started', assignee:'UX Lead',         deps:[4] },
+    { id: 6, name: 'Technical Architecture',   start: addW(start,5), end: addW(start,7), status:'not-started', assignee:'Tech Lead',        deps:[4] },
+    { id: 7, name: 'Build -- Phase 1 (MVP)',   start: addW(start,7), end: addW(start,10), status:'not-started', assignee:'Engineering',    deps:[5,6] },
+    { id: 8, name: 'QA & User Acceptance',     start: addW(start,10), end: addW(start,11), status:'not-started', assignee:'QA Lead',       deps:[7] },
+    { id: 9, name: 'Go-Live / Launch',         start: addW(start,11), end: addW(start,11), status:'not-started', assignee:'Programme Lead', deps:[8], milestone:true },
+    { id:10, name: 'Post-Launch Review',       start: addW(start,11), end: addW(start,12), status:'not-started', assignee:'Product Owner',  deps:[9] },
+  ];
+
+  const COLOR = {
+    'done':         { bar:'#22c55e', text:'#ffffff' },
+    'in-progress':  { bar: accent,   text:'#ffffff' },
+    'delayed':      { bar:'#ef4444', text:'#ffffff' },
+    'not-started':  { bar:'#3b82f6', text:'#ffffff' },
+  };
+
+  const totalDays = 84; // 12 weeks
+  const ROW_H = 44, BAR_H = 28, HDR_H = 36, LBL_W = 210, DAY_W = 14;
+  const chartW = LBL_W + totalDays * DAY_W;
+  const chartH = HDR_H + tasks.length * ROW_H + 40;
+  const todayOffset = Math.max(0, Math.floor((now - start) / 86400000));
+
+  // Build week headers
+  let weekHeaders = '';
+  for (let w = 0; w < 12; w++) {
+    const wd = addW(start, w);
+    const x = LBL_W + w * 7 * DAY_W;
+    const label = 'W' + (w + 1) + ' ' + wd.toLocaleDateString('en-GB', {day:'2-digit',month:'short'});
+    weekHeaders += '<div style="position:absolute;left:' + x + 'px;top:0;width:' + (7*DAY_W) + 'px;height:' + HDR_H + 'px;border-right:1px solid #3a3028;display:flex;align-items:center;justify-content:center;font-size:10px;color:#a89070;font-weight:600;">' + label + '</div>';
+  }
+
+  // Build task rows
+  let rows = '';
+  tasks.forEach((t, i) => {
+    const y = HDR_H + i * ROW_H;
+    const dStart = Math.floor((t.start - start) / 86400000);
+    const dEnd   = Math.max(dStart + 1, Math.floor((t.end - start) / 86400000));
+    const barX   = LBL_W + dStart * DAY_W;
+    const barW   = t.milestone ? 0 : (dEnd - dStart) * DAY_W;
+    const barY   = (ROW_H - BAR_H) / 2;
+    const c = COLOR[t.status] || COLOR['not-started'];
+    const isToday = i === 0; // stripe on first row only
+
+    // Row BG
+    rows += '<div style="position:absolute;left:0;top:' + y + 'px;width:100%;height:' + ROW_H + 'px;background:' + (i%2===0 ? '#1a120a' : '#1e1610') + ';border-bottom:1px solid #2a1f14;">';
+    // Label
+    rows += '<div style="position:absolute;left:0;top:0;width:' + LBL_W + 'px;height:' + ROW_H + 'px;display:flex;align-items:center;padding-left:10px;font-size:11px;color:#d4c5b0;border-right:2px solid #3a2a1a;overflow:hidden;white-space:nowrap;"><span style="overflow:hidden;text-overflow:ellipsis;">' + t.name + '</span></div>';
+    
+    if (t.milestone) {
+      // Diamond
+      const mx = LBL_W + dStart * DAY_W - 8;
+      const my = (ROW_H - 16) / 2;
+      rows += '<div style="position:absolute;left:' + mx + 'px;top:' + my + 'px;width:16px;height:16px;background:' + accent + ';transform:rotate(45deg);border:2px solid #fff;" title="Milestone: ' + t.name + '"></div>';
+    } else {
+      // Task bar (uniform 28px height)
+      rows += '<div style="position:absolute;left:' + barX + 'px;top:' + (barY) + 'px;width:' + barW + 'px;height:' + BAR_H + 'px;background:' + c.bar + ';border-radius:4px;display:flex;align-items:center;padding:0 6px;font-size:10px;color:' + c.text + ';font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.4);">' + (barW > 60 ? t.status.replace('-',' ').toUpperCase() : '') + '</div>';
+    }
+    // Assignee badge
+    rows += '<div style="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:9px;color:#8a7060;white-space:nowrap;">' + t.assignee + '</div>';
+    rows += '</div>';
+  });
+
+  // Today line
+  const todayX = LBL_W + todayOffset * DAY_W;
+  const todayLine = '<div style="position:absolute;left:' + todayX + 'px;top:' + HDR_H + 'px;width:2px;height:' + (tasks.length * ROW_H) + 'px;background:' + accent + ';opacity:0.8;z-index:10;" title="Today"></div>';
+  const todayLabel = '<div style="position:absolute;left:' + (todayX-14) + 'px;top:' + (HDR_H - 14) + 'px;font-size:9px;color:' + accent + ';font-weight:700;">TODAY</div>';
+
+  // Legend
+  const legend = Object.entries(COLOR).map(([k,v]) =>
+    '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:10px;color:#d4c5b0;"><span style="display:inline-block;width:14px;height:10px;background:' + v.bar + ';border-radius:2px;"></span>' + k.replace('-',' ') + '</span>'
+  ).join('');
+
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + product + ' -- Gantt</title>'
+    + '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,sans-serif;background:#0c0906;color:#f0ebe0;padding:20px}'
+    + '.gantt-wrap{overflow-x:auto;border-radius:8px;border:1px solid #3a2a1a}'
+    + '.gantt-inner{position:relative;width:' + chartW + 'px;min-height:' + chartH + 'px}'
+    + '.hdr{position:absolute;left:0;top:0;width:100%;height:' + HDR_H + 'px;background:#1a120a;border-bottom:2px solid ' + accent + ';}'
+    + '.hdr-lbl{position:absolute;left:0;top:0;width:' + LBL_W + 'px;height:' + HDR_H + 'px;display:flex;align-items:center;padding-left:10px;font-size:11px;font-weight:700;color:' + accent + ';border-right:2px solid #3a2a1a;}'
+    + '</style></head><body>'
+    + '<h2 style="font-size:16px;font-weight:700;color:' + accent + ';margin-bottom:4px;">' + product + ' -- Project Gantt Chart</h2>'
+    + '<p style="font-size:11px;color:#8a7060;margin-bottom:12px;">12-week delivery plan | Generated ' + fmt(now) + ' | MOCK mode</p>'
+    + '<div class="gantt-wrap"><div class="gantt-inner">'
+    + '<div class="hdr"><div class="hdr-lbl">Task</div>' + weekHeaders + '</div>'
+    + rows + todayLine + todayLabel
+    + '</div></div>'
+    + '<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:4px;">' + legend + '</div>'
+    + '<p style="margin-top:8px;font-size:10px;color:#5a4a38;">Milestone (♦): Stakeholder Sign-off (Wk 5) | Go-Live (Wk 11). '
+    + 'All rows uniform 44px height. Bar height uniform 28px.</p>'
+    + '</body></html>';
+
+  return html;
+}
+
+// =================================================================
+// PROCESS MAP -- 160x50 boxes, 84x84 diamonds, 130x50 ovals
+// =================================================================
+function mockProcessMap(ctx) {
+  const { product, brand } = ctx;
+  const isHSBC = /hsbc/i.test(brand + ctx.brief + ctx.projectName);
+  const accent = isHSBC ? '#DB0011' : '#c9980e';
+
+  // Box dimensions -- ENFORCED UNIFORM
+  const BW = 160, BH = 50;
+  const DW = 84, DH = 84;  // diamond bounding box
+  const OW = 130, OH = 50;  // oval
+  const COL_X = 80; // center x
+  const GAP = 30;
+
+  // Layout: top-down, centered at x=COL_X+BW/2=160
+  const CX = 200;
+  let y = 40;
+  const nodes = [];
+  const addNode = (type, label, sublabel) => {
+    nodes.push({ type, label, sublabel: sublabel||'', y });
+    const h = type==='diamond' ? DH : BH;
+    y += h + GAP + (type==='diamond' ? 10 : 0);
+    return nodes.length - 1;
+  };
+
+  addNode('oval',    'START', 'Trigger event');
+  addNode('box',     'Receive Application', 'System: Digital Portal');
+  addNode('box',     'Validate KYC Data', 'Automated + Manual');
+  addNode('diamond', 'KYC\nComplete?', '');
+  addNode('box',     'AML & Sanctions Check', 'Risk Engine');
+  addNode('diamond', 'AML\nPassed?', '');
+  addNode('box',     'Credit Scoring', 'Bureau + Internal Model');
+  addNode('diamond', 'Credit\nApproved?', '');
+  addNode('box',     'Issue Decision Letter', 'Email + Push Notification');
+  addNode('box',     'Card Personalisation', 'Ops Team');
+  addNode('oval',    'END', 'Application Closed');
+
+  const totalH = y + 60;
+  const totalW = 480;
+
+  const svgNodes = nodes.map((n, i) => {
+    const cx = CX + BW / 2;  // = 280 center
+    let shape = '';
+    if (n.type === 'oval') {
+      const x = cx - OW/2, ny = n.y;
+      shape = '<ellipse cx="' + cx + '" cy="' + (ny+OH/2) + '" rx="' + (OW/2) + '" ry="' + (OH/2) + '" fill="' + accent + '" stroke="' + accent + '" stroke-width="2"/>'
+             + '<text x="' + cx + '" y="' + (ny+OH/2-5) + '" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">' + n.label + '</text>'
+             + (n.sublabel ? '<text x="' + cx + '" y="' + (ny+OH/2+9) + '" text-anchor="middle" fill="#fff" font-size="9">' + n.sublabel + '</text>' : '');
+    } else if (n.type === 'box') {
+      const x = cx - BW/2, ny = n.y;
+      shape = '<rect x="' + x + '" y="' + ny + '" width="' + BW + '" height="' + BH + '" rx="6" fill="#1e1610" stroke="' + accent + '" stroke-width="1.5"/>'
+             + '<text x="' + cx + '" y="' + (ny+BH/2-5) + '" text-anchor="middle" fill="#f0ebe0" font-size="11" font-weight="600">' + n.label + '</text>'
+             + (n.sublabel ? '<text x="' + cx + '" y="' + (ny+BH/2+9) + '" text-anchor="middle" fill="#8a7060" font-size="9">' + n.sublabel + '</text>' : '');
+    } else if (n.type === 'diamond') {
+      // Diamond centered at cx, top at n.y
+      const dx = cx, dy = n.y + DH/2;
+      const pts = (dx) + ',' + (n.y) + ' ' + (dx+DW/2) + ',' + dy + ' ' + dx + ',' + (n.y+DH) + ' ' + (dx-DW/2) + ',' + dy;
+      const lines = n.label.split('\n');
+      shape = '<polygon points="' + pts + '" fill="#2a1f14" stroke="' + accent + '" stroke-width="1.5"/>'
+             + lines.map((l,li) => '<text x="' + dx + '" y="' + (dy - 4 + li*13) + '" text-anchor="middle" fill="#f0ebe0" font-size="10" font-weight="600">' + l + '</text>').join('');
+    }
+    return shape;
+  }).join('\n');
+
+  // Draw arrows between consecutive nodes (with special branches for diamonds)
+  let arrows = '';
+  const getBottom = n => {
+    if (n.type==='oval') return { x: CX+BW/2, y: n.y+OH };
+    if (n.type==='box') return { x: CX+BW/2, y: n.y+BH };
+    if (n.type==='diamond') return { x: CX+BW/2, y: n.y+DH };
+    return { x:CX+BW/2, y: n.y+BH };
+  };
+  const getTop = n => {
+    if (n.type==='oval') return { x: CX+BW/2, y: n.y };
+    if (n.type==='box') return { x: CX+BW/2, y: n.y };
+    if (n.type==='diamond') return { x: CX+BW/2, y: n.y };
+    return { x: CX+BW/2, y: n.y };
+  };
+
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const from = getBottom(nodes[i]);
+    const to   = getTop(nodes[i+1]);
+    arrows += '<line x1="' + from.x + '" y1="' + from.y + '" x2="' + to.x + '" y2="' + (to.y-6) + '" stroke="' + accent + '" stroke-width="1.5" marker-end="url(#arr)"/>';
+
+    // Add Yes label on diamond outputs
+    if (nodes[i].type==='diamond') {
+      const mx = from.x + 4;
+      const my = from.y + (to.y - from.y)/2;
+      arrows += '<text x="' + (mx+4) + '" y="' + my + '" fill="#22c55e" font-size="9" font-weight="700">YES</text>';
+      // NO branch -- goes right
+      const rx = CX + BW/2 + DW/2, ry = nodes[i].y + DH/2;
+      const noY = nodes[i+2] ? getTop(nodes[i+2]).y : ry + 80;
+      arrows += '<line x1="' + rx + '" y1="' + ry + '" x2="' + (rx+60) + '" y2="' + ry + '" stroke="#ef4444" stroke-width="1.5"/>'
+             + '<line x1="' + (rx+60) + '" y1="' + ry + '" x2="' + (rx+60) + '" y2="' + (ry+30) + '" stroke="#ef4444" stroke-width="1.5"/>'
+             + '<text x="' + (rx+6) + '" y="' + (ry-4) + '" fill="#ef4444" font-size="9" font-weight="700">NO</text>'
+             + '<text x="' + (rx+64) + '" y="' + (ry+20) + '" fill="#ef4444" font-size="9">Manual Review</text>';
+    }
+  }
+
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + product + ' -- Process Map</title>'
+    + '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,sans-serif;background:#0c0906;color:#f0ebe0;padding:20px}'
+    + 'svg{border-radius:8px;border:1px solid #3a2a1a;background:#13100d;display:block;margin:0 auto;}'
+    + '</style></head><body>'
+    + '<h2 style="font-size:16px;font-weight:700;color:' + accent + ';margin-bottom:4px;">' + product + ' -- Process Map</h2>'
+    + '<p style="font-size:11px;color:#8a7060;margin-bottom:12px;">Process boxes: 160x50px | Decision diamonds: 84x84px | Ovals: 130x50px | MOCK mode</p>'
+    + '<svg width="' + totalW + '" height="' + totalH + '" xmlns="http://www.w3.org/2000/svg">'
+    + '<defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="' + accent + '"/></marker></defs>'
+    + arrows + svgNodes
+    + '</svg>'
+    + '<p style="margin-top:12px;font-size:10px;color:#5a4a38;">All process boxes: 160x50px uniform. Decisions: 84x84px. Ovals: 130x50px. Green=Yes path, Red=No/escalation path.</p>'
+    + '</body></html>';
+
+  return html;
+}
+
+// =================================================================
+// FLOWCHART -- 160x50 boxes, 84x84 diamonds, data parallelograms
+// =================================================================
+function mockFlowchart(ctx) {
+  const { product, brand } = ctx;
+  const isHSBC = /hsbc/i.test(brand + ctx.brief + ctx.projectName);
+  const accent = isHSBC ? '#DB0011' : '#c9980e';
+
+  const BW=160, BH=50, DW=84, DH=84, OW=130, OH=50, PW=160, PH=50;
+  const CX = 180, GAP = 28;
+  let y = 40;
+
+  const nodes = [
+    { type:'oval',    label:'START',              sub:'User initiates request' },
+    { type:'data',    label:'Input: Request Data', sub:'Form / API payload' },
+    { type:'box',     label:'Validate Input',      sub:'Schema + business rules' },
+    { type:'diamond', label:'Valid?',              sub:'' },
+    { type:'box',     label:'Process Request',     sub:'Core business logic' },
+    { type:'box',     label:'Apply Risk Rules',    sub:'Automated checks' },
+    { type:'diamond', label:'Rules\nPassed?',      sub:'' },
+    { type:'box',     label:'Generate Response',   sub:'Format output payload' },
+    { type:'data',    label:'Output: Response',    sub:'JSON / Notification' },
+    { type:'oval',    label:'END',                 sub:'Process complete' },
+  ];
+
+  nodes.forEach(n => {
+    n.y = y;
+    const h = n.type==='diamond' ? DH : BH;
+    y += h + GAP;
+  });
+
+  const totalH = y + 60, totalW = 460;
+  const cx = CX + BW/2;
+
+  const svgNodes = nodes.map(n => {
+    let s = '';
+    if (n.type==='oval') {
+      s = '<ellipse cx="' + cx + '" cy="' + (n.y+OH/2) + '" rx="' + (OW/2) + '" ry="' + (OH/2) + '" fill="' + accent + '" stroke="' + accent + '" stroke-width="2"/>'
+        + '<text x="' + cx + '" y="' + (n.y+OH/2-4) + '" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">' + n.label + '</text>'
+        + (n.sub ? '<text x="' + cx + '" y="' + (n.y+OH/2+9) + '" text-anchor="middle" fill="#fff" font-size="9">' + n.sub + '</text>' : '');
+    } else if (n.type==='box') {
+      s = '<rect x="' + (cx-BW/2) + '" y="' + n.y + '" width="' + BW + '" height="' + BH + '" rx="5" fill="#1e1610" stroke="' + accent + '" stroke-width="1.5"/>'
+        + '<text x="' + cx + '" y="' + (n.y+BH/2-4) + '" text-anchor="middle" fill="#f0ebe0" font-size="11" font-weight="600">' + n.label + '</text>'
+        + (n.sub ? '<text x="' + cx + '" y="' + (n.y+BH/2+9) + '" text-anchor="middle" fill="#8a7060" font-size="9">' + n.sub + '</text>' : '');
+    } else if (n.type==='data') {
+      // Parallelogram
+      const x0=cx-PW/2, x1=cx+PW/2, off=12;
+      const pts = (x0+off)+','+n.y+' '+(x1+off)+','+n.y+' '+(x1-off)+','+(n.y+PH)+' '+(x0-off)+','+(n.y+PH);
+      s = '<polygon points="' + pts + '" fill="#0d1a2a" stroke="#3b82f6" stroke-width="1.5"/>'
+        + '<text x="' + cx + '" y="' + (n.y+PH/2-4) + '" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="600">' + n.label + '</text>'
+        + (n.sub ? '<text x="' + cx + '" y="' + (n.y+PH/2+9) + '" text-anchor="middle" fill="#60a5fa" font-size="9">' + n.sub + '</text>' : '');
+    } else if (n.type==='diamond') {
+      const dy = n.y + DH/2;
+      const pts = cx+','+n.y+' '+(cx+DW/2)+','+dy+' '+cx+','+(n.y+DH)+' '+(cx-DW/2)+','+dy;
+      const lines = n.label.split('\n');
+      s = '<polygon points="' + pts + '" fill="#2a1f14" stroke="' + accent + '" stroke-width="1.5"/>'
+        + lines.map((l,li) => '<text x="' + cx + '" y="' + (dy-4+li*13) + '" text-anchor="middle" fill="#f0ebe0" font-size="10" font-weight="600">' + l + '</text>').join('');
+    }
+    return s;
+  }).join('\n');
+
+  // Arrows
+  let arrows = '';
+  const getBot = n => n.type==='diamond' ? {x:cx,y:n.y+DH} : {x:cx,y:n.y+BH};
+  const getTop = n => ({x:cx, y:n.y});
+
+  for (let i=0; i<nodes.length-1; i++) {
+    const fr = getBot(nodes[i]);
+    const to = getTop(nodes[i+1]);
+    arrows += '<line x1="'+fr.x+'" y1="'+fr.y+'" x2="'+to.x+'" y2="'+(to.y-6)+'" stroke="'+accent+'" stroke-width="1.5" marker-end="url(#arr)"/>';
+    if (nodes[i].type==='diamond') {
+      arrows += '<text x="'+(fr.x+4)+'" y="'+(fr.y+12)+'" fill="#22c55e" font-size="9" font-weight="700">YES</text>';
+      const rx = cx+DW/2, ry = nodes[i].y+DH/2;
+      arrows += '<line x1="'+rx+'" y1="'+ry+'" x2="'+(rx+55)+'" y2="'+ry+'" stroke="#ef4444" stroke-width="1.5"/>'
+             + '<text x="'+(rx+4)+'" y="'+(ry-4)+'" fill="#ef4444" font-size="9" font-weight="700">NO</text>'
+             + '<text x="'+(rx+58)+'" y="'+(ry+4)+'" fill="#ef4444" font-size="9">Error Handler</text>';
+    }
+  }
+
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+product+' -- Flowchart</title>'
+    + '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,sans-serif;background:#0c0906;color:#f0ebe0;padding:20px}'
+    + 'svg{border-radius:8px;border:1px solid #3a2a1a;background:#13100d;display:block;margin:0 auto}'
+    + '</style></head><body>'
+    + '<h2 style="font-size:16px;font-weight:700;color:'+accent+';margin-bottom:4px;">'+product+' -- Flowchart</h2>'
+    + '<p style="font-size:11px;color:#8a7060;margin-bottom:12px;">Process: 160x50px | Diamond: 84x84px | Data (parallelogram): 160x50px | Oval: 130x50px | MOCK mode</p>'
+    + '<svg width="'+totalW+'" height="'+totalH+'" xmlns="http://www.w3.org/2000/svg">'
+    + '<defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="'+accent+'"/></marker></defs>'
+    + arrows + svgNodes
+    + '</svg>'
+    + '<div style="margin-top:12px;font-size:10px;color:#5a4a38;">'
+    + '<span style="color:'+accent+'">-- Process box</span> 160x50px &nbsp;'
+    + '<span style="color:#3b82f6">-- Data parallelogram</span> 160x50px &nbsp;'
+    + '<span style="color:'+accent+'">-- Decision diamond</span> 84x84px &nbsp;'
+    + '<span style="color:'+accent+'">-- Oval</span> 130x50px'
+    + '</div></body></html>';
+
+  return html;
 }

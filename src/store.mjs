@@ -69,3 +69,37 @@ export function setStage(pid, stage) {
   if (!p) return;
   p.stage = stage; write(db);
 }
+
+export function addDecision(pid, { title, description, decidedBy, outcome }) {
+  const db = read();
+  const p = db.projects.find(x => x.id === pid);
+  if (!p) throw new Error('project not found');
+  if (!p.decisions) p.decisions = [];
+  const entry = { id: id('dec_'), title, description: description||'', decidedBy, outcome: outcome||'', at: new Date().toISOString() };
+  p.decisions.unshift(entry);
+  write(db);
+  return entry;
+}
+
+export function addSignOff(pid, { artifactTitle, signedBy, role, notes }) {
+  const db = read();
+  const p = db.projects.find(x => x.id === pid);
+  if (!p) throw new Error('project not found');
+  if (!p.signOffs) p.signOffs = [];
+  const entry = { id: id('sgn_'), artifactTitle, signedBy, role: role||'', notes: notes||'', at: new Date().toISOString() };
+  p.signOffs.unshift(entry);
+  write(db);
+  return entry;
+}
+
+export function getDashboard(pid) {
+  const p = getProject(pid);
+  if (!p) throw new Error('project not found');
+  return {
+    project: { id:p.id, name:p.name, description:p.description, owner:p.owner, stage:p.stage, createdAt:p.createdAt },
+    team: p.stakeholders || [],
+    decisions: (p.decisions || []).slice(0, 20),
+    signOffs: (p.signOffs || []).slice(0, 20),
+    recentEvents: (p.events || []).slice(0, 10),
+  };
+}

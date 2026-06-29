@@ -64,8 +64,10 @@ const INTENT_TAXONOMY = {
       'experience map','service blueprint','system design',
       'architecture','data flow','state machine',
       'hsbc red','hsbc diagram','banking flow','credit card flow',
+      'gantt','gantt chart','project timeline','milestone chart','schedule',
+      'process map','process diagram','top-down flow','bpmn','procedure map',
     ],
-    skills: ['flowforge','drawio-swimlane','process-flow','html-ui-screens'],
+    skills: ['flowforge','gantt-chart','process-map','flowchart','drawio-swimlane','process-flow','html-ui-screens'],
     phase: 'mid', domain: 'diagramming',
   },
   PLAN: {
@@ -159,7 +161,7 @@ function selectSkills(intent, message, project) {
       'market-research':1,'discovery-brief':1,'competitive-analysis':2,'jtbd-framework':2,
       'prd':3,'user-story':3,'stakeholder-map':3,
       'prioritization-rice':4,'roadmap':4,'okr-framework':4,'business-case':4,'executive-summary':4,
-      'flowforge':5,'drawio-swimlane':5,'process-flow':5,'html-ui-screens':5,
+      'flowforge':5,'gantt-chart':5,'process-map':5,'flowchart':5,'drawio-swimlane':5,'process-flow':5,'html-ui-screens':5,
       'project-charter':6,'resource-plan':6,'release-plan':6,
       'sprint-plan':7,'plan-on-a-page':7,
       'raid-log':8,'status-report':8,'change-request':8,'escalation-brief':8,'retrospective':8,
@@ -232,7 +234,7 @@ const delegationTool = {
 // =================================================================
 // EXECUTE DELEGATION
 // =================================================================
-async function executeDelegation(project, input, onEvent, stepId, sessionId = null) {
+async function executeDelegation(project, input, onEvent, stepId, sessionId = null, createdBy = null) {
   const { domain, skill, task_brief, artifact_title } = input;
   onEvent('step_progress', { stepId, message: `Loading skill: ${skill}` });
   await delay(300);
@@ -241,7 +243,7 @@ async function executeDelegation(project, input, onEvent, stepId, sessionId = nu
     projectId:project.id, domain, skillName:skill, taskBrief:task_brief, project,
   });
   onEvent('step_progress', { stepId, message: 'Writing artifact to workspace...' });
-  const meta = writeArtifact(project.id, { title:artifact_title, domain, skill, stage, content, createdBy:domain+' agent', sessionId });
+  const meta = writeArtifact(project.id, { title:artifact_title, domain, skill, stage, content, createdBy: createdBy || (domain+' agent'), sessionId });
   setStage(project.id, stage);
   logEvent(project.id, { type:'artifact_created', domain, skill, title:artifact_title, artifactId:meta.artifactId, version:meta.version, stage, sessionId });
   if (sessionId) updateSession(project.id, sessionId, { stepId, stepStatus:'done', artifactId:meta.artifactId });
@@ -253,18 +255,18 @@ async function executeDelegation(project, input, onEvent, stepId, sessionId = nu
 // =================================================================
 // PUBLIC ENTRY
 // =================================================================
-export async function runSuperAgent({ projectId, message, onEvent=()=>{} }) {
+export async function runSuperAgent({ projectId, message, user = null, onEvent=()=>{} }) {
   const project = getProject(projectId);
   if (!project) throw new Error('project not found');
   logEvent(projectId, { type:'user_message', message });
-  if (!isLive()) return mockRun(project, message, onEvent);
-  return liveRun(project, message, onEvent);
+  if (!isLive()) return mockRun(project, message, onEvent, user);
+  return liveRun(project, message, onEvent, user);
 }
 
 // =================================================================
 // LIVE RUN
 // =================================================================
-async function liveRun(project, message, onEvent) {
+async function liveRun(project, message, onEvent, user = null) {
   const catalogue     = skillCatalogue();
   const intent        = classifyIntent(message);
   const projectMemory = buildProjectMemory(project);
@@ -344,7 +346,7 @@ async function liveRun(project, message, onEvent) {
 // =================================================================
 // MOCK RUN -- Benchmark Intent Engine
 // =================================================================
-async function mockRun(project, message, onEvent) {
+async function mockRun(project, message, onEvent, user = null) {
   onEvent('step_start', { stepId:'__plan', title:'Classifying intent and selecting skills...' });
   await delay(600);
 
@@ -421,4 +423,29 @@ async function mockRun(project, message, onEvent) {
   onEvent('reply', { text:reply });
   onEvent('done', {});
   return { mode:MODE, reply, artifacts:produced };
+}
+
+
+// =================================================================
+// PLAN AGENT -- classify intent, select skills, return plan (no execution)
+// =================================================================
+export function runPlanAgent({ projectId, message }) {
+  const project = getProject(projectId);
+  if (!project) throw new Error('project not found');
+  const intent  = classifyIntent(message);
+  const chosen  = selectSkills(intent, message, project);
+  const intentLabels = {
+    DISCOVER:'Discover', STRATEGIZE:'Strategise', SPECIFY:'Specify',
+    DESIGN:'Design', PLAN:'Plan', GOVERN:'Govern',
+    COMMUNICATE:'Communicate', ANALYSE:'Analyse',
+  };
+  const primary = intentLabels[intent.primary] || intent.primary;
+  const secondary = intent.secondary ? intentLabels[intent.secondary] : null;
+  const intentLabel = [primary, secondary].filter(Boolean).join(' + ');
+  const steps = chosen.map((skill, i) => ({
+    id: String(i + 1),
+    title: skill.description.split('.')[0].slice(0, 80),
+    domain: skill.domain, skill: skill.name, status: 'pending',
+  }));
+  return { intent: intentLabel, steps, skillCount: chosen.length };
 }

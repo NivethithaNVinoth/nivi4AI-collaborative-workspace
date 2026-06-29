@@ -11,6 +11,8 @@ let currentProject         = null;
 let taskPlan               = {};
 let pendingArtifacts       = [];
 let running                = false;
+let pendingPlan            = null;   // { intent, steps, message } awaiting approval
+let pendingMessage         = '';     // original message during plan approval
 
 // ── workflow state ────────────────────────────────────────────────
 let currentUser                  = localStorage.getItem('n4ai_user') || '';
@@ -39,13 +41,44 @@ async function boot() {
 // SKILLS
 // ═══════════════════════════════════════════════════════════
 function renderSkillList(skills) {
+  // Store globally for Skill Hub
+  window._allSkills = skills;
+  renderSkillHub(skills);
+}
+
+function renderSkillHub(skills, filter = '') {
+  const q = filter.toLowerCase();
+  const list = filter ? skills.filter(s =>
+    s.name.toLowerCase().includes(q) || (s.description||'').toLowerCase().includes(q)
+  ) : skills;
+
   const byDomain = {};
-  skills.forEach(s => (byDomain[s.domain] ||= []).push(s));
-  $('#skillList').innerHTML = Object.entries(byDomain).map(([d, list]) =>
-    `<div class="skill-domain">${d.replace('-',' ')}</div>` +
-    list.map(s => `<div class="skill-item" title="${s.description}">${s.name}</div>`).join('')
-  ).join('');
-  $('#skillCount').textContent = skills.length;
+  list.forEach(s => (byDomain[s.domain] ||= []).push(s));
+
+  const DOMAIN_LABELS = {
+    'product-management': { label:'Product Management', color:'#c9980e' },
+    'project-management': { label:'Project Management', color:'#3b82f6' },
+    'diagramming':        { label:'Diagramming',        color:'#8b5cf6' },
+  };
+
+  const hub = $('#skillHubList');
+  if (!hub) return;
+  if (!list.length) { hub.innerHTML = '<div class="panel-empty"><p>No skills match.</p></div>'; return; }
+
+  hub.innerHTML = Object.entries(byDomain).map(([d, slist]) => {
+    const dl = DOMAIN_LABELS[d] || { label: d, color:'#6b7280' };
+    const cards = slist.map(s =>
+      '<div class="skill-card">' +
+        '<div class="skill-card-header">' +
+          '<span class="skill-card-name">' + esc(s.name) + '</span>' +
+          '<span class="skill-card-badge" style="background:' + dl.color + '22;color:' + dl.color + '">' + esc(dl.label) + '</span>' +
+        '</div>' +
+        '<div class="skill-card-desc">' + esc(s.description || '') + '</div>' +
+        (s.when_to_use ? '<div class="skill-card-when"><b>Use when:</b> ' + esc(s.when_to_use.slice(0,120)) + '</div>' : '') +
+      '</div>'
+    ).join('');
+    return '<div class="skill-hub-domain-header">' + esc(dl.label) + ' <span class="skill-hub-count">(' + slist.length + ')</span></div>' + cards;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -216,9 +249,10 @@ async function synthesizeHistoryFromArtifacts(log) {
       const domLabel = (a.domain||'').includes('product') ? 'PROD MGT' : 'PROJ MGT';
       const ver = a.version > 1 ? ` <span class="ver-badge">v${a.version}</span>` : '';
       const latest = a.isLatest ? '' : ' <span style="color:var(--text-3);font-size:9px">(older)</span>';
+      const byLabel = a.createdBy && !a.createdBy.includes('agent') ? ' · ' + esc(a.createdBy.split('@')[0]) : '';
       pill.innerHTML = `<span class="artifact-badge ${a.domain||''}">${domLabel}</span>
         <span style="font-weight:600;color:var(--text)">📄 ${esc(a.title||'Artifact')}${ver}${latest}</span>
-        <span style="color:var(--text-3);margin-left:auto;font-size:10px">${esc(a.skill||'')}${timeLabel?' · '+timeLabel:''}</span>
+        <span style="color:var(--text-3);margin-left:auto;font-size:10px">${esc(a.skill||'')}${timeLabel?' · '+timeLabel:''}${byLabel}</span>
         <span style="color:var(--accent);font-size:10px">↗</span>`;
       pill.addEventListener('click', () => { if(pill.dataset.artPath) openArtifact(pill.dataset.artPath); });
       log.appendChild(pill);
@@ -959,9 +993,96 @@ async function sendMessage() {
   appendUserBubble(msg);
   taskPlan={}; pendingArtifacts=[];
   switchTab('plan');
+
+  // Phase 1: Get plan and wait for approval
+  try {
+    const plan = await api(`/api/projects/${currentProject.id}/plan`, {
+      method:'POST', body: JSON.stringify({ message: msg }),
+    });
+    pendingPlan    = plan;
+    pendingMessage = msg;
+    running = false; // allow approval interaction
+    showPlanApproval(plan);
+    return; // wait for user approval
+  } catch(e) {
+    // If plan endpoint fails, fall through to direct execution
+    console.warn('Plan endpoint failed, executing directly:', e);
+  }
+  await executeMessage(msg);
+}
+
+function showPlanApproval(plan) {
+  const bar = $('#planApprovalBar');
+  $('#planApprovalIntent').textContent = plan.intent || 'Task Plan';
+  $('#planApprovalSummary').textContent = plan.skillCount + ' skill' + (plan.skillCount!==1?'s':'') + ' selected: ' +
+    plan.steps.map(s => s.skill).join(', ');
+  bar.hidden = false;
+  // Show plan steps in the plan panel
+  const list = $('#taskPlanList'); const empty = $('#planEmpty');
+  empty.hidden = true; list.hidden = false;
+  const preview = document.createElement('div');
+  preview.className = 'plan-preview-block';
+  preview.innerHTML = '<div class="plan-preview-label">Proposed Plan — awaiting approval</div>' +
+    plan.steps.map((s,i) =>
+      '<div class="plan-preview-step">' +
+        '<span class="plan-preview-num">' + (i+1) + '</span>' +
+        '<span class="plan-preview-title">' + esc(s.title||s.skill) + '</span>' +
+        '<span class="plan-preview-skill">' + esc(s.domain||'') + '/' + esc(s.skill||'') + '</span>' +
+      '</div>'
+    ).join('');
+  if (list.firstChild) list.insertBefore(preview, list.firstChild);
+  else list.appendChild(preview);
+}
+
+async function approvePlan() {
+  if (!pendingMessage) return;
+  $('#planApprovalBar').hidden = true;
+  $('#planRejectBar').hidden   = true;
+  // Remove preview block
+  const prev = document.querySelector('.plan-preview-block');
+  if (prev) prev.remove();
+  await executeMessage(pendingMessage);
+  pendingPlan = null; pendingMessage = '';
+}
+
+function rejectPlan() {
+  $('#planApprovalBar').hidden = true;
+  $('#planRejectBar').hidden   = false;
+  $('#planFeedbackInput').focus();
+}
+
+async function resubmitPlan() {
+  const feedback = $('#planFeedbackInput').value.trim();
+  const base = pendingMessage;
+  const revised = feedback ? base + '. Specifically: ' + feedback : base;
+  $('#planRejectBar').hidden = true;
+  $('#planFeedbackInput').value = '';
+  // Remove old preview
+  const prev = document.querySelector('.plan-preview-block');
+  if (prev) prev.remove();
+  // Re-run plan phase with revised message
+  running = true; $('#sendBtn').disabled = true;
+  appendUserBubble('[Revised] ' + (feedback || base));
+  try {
+    const plan = await api(`/api/projects/${currentProject.id}/plan`, {
+      method:'POST', body: JSON.stringify({ message: revised }),
+    });
+    pendingPlan    = plan;
+    pendingMessage = revised;
+    running = false;
+    showPlanApproval(plan);
+  } catch(e) {
+    running = false; $('#sendBtn').disabled = false;
+    appendReply('Could not regenerate plan: ' + e.message);
+  }
+}
+
+async function executeMessage(msg) {
+  running=true; $('#sendBtn').disabled=true;
   try {
     const resp=await fetch(`/api/projects/${currentProject.id}/invoke-stream`,{
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}),
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ message:msg, user: currentUser||null }),
     });
     if (!resp.ok) throw new Error(`Server error ${resp.status}`);
     const reader=resp.body.getReader(); const decoder=new TextDecoder(); let buffer='';
@@ -1094,8 +1215,120 @@ function showToast(msg){
 // ═══════════════════════════════════════════════════════════
 function switchTab(name){
   $$('.panel-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
-  $('#tabPlan').hidden=name!=='plan'; $('#tabOutputs').hidden=name!=='outputs';
-  $('#tabCollab').hidden=name!=='collab'; $('#tabTeam').hidden=name!=='team';
+  $('#tabPlan').hidden     = name!=='plan';
+  $('#tabOutputs').hidden  = name!=='outputs';
+  $('#tabCollab').hidden   = name!=='collab';
+  $('#tabTeam').hidden     = name!=='team';
+  const dash = $('#tabDashboard'); if (dash) dash.hidden = name!=='dashboard';
+  const hub  = $('#tabSkills');    if (hub)  hub.hidden  = name!=='skills';
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'skills') renderSkillHub(window._allSkills || [], $('#skillSearchInput') ? $('#skillSearchInput').value : '');
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════
+async function loadDashboard() {
+  if (!currentProject) return;
+  const container = $('#dashboardContent');
+  if (!container) return;
+  container.innerHTML = '<div style="padding:16px;font-size:11px;color:var(--text-3)">Loading...</div>';
+  try {
+    const d = await api('/api/projects/' + currentProject.id + '/dashboard');
+    const arts = await api('/api/projects/' + currentProject.id + '/artifacts');
+    const latestArts = arts.filter(a => a.isLatest).slice(0, 8);
+
+    const teamRows = (d.team||[]).map(s =>
+      '<tr><td>' + esc(s.email) + '</td><td>' + esc(s.role||'') + '</td><td style="color:var(--text-3);font-size:10px">' + fmtDate(s.addedAt||'') + '</td></tr>'
+    ).join('');
+
+    const decisionRows = (d.decisions||[]).length
+      ? (d.decisions||[]).map(dec =>
+          '<tr><td><b>' + esc(dec.title) + '</b><br><span style="font-size:10px;color:var(--text-3)">' + esc(dec.description||'') + '</span></td>' +
+          '<td>' + esc(dec.outcome||'-') + '</td><td style="font-size:10px">' + esc(dec.decidedBy) + '</td>' +
+          '<td style="font-size:10px;color:var(--text-3)">' + fmtDate(dec.at) + '</td></tr>'
+        ).join('')
+      : '<tr><td colspan="4" style="color:var(--text-3);font-size:10px">No decisions logged yet.</td></tr>';
+
+    const signOffRows = (d.signOffs||[]).length
+      ? (d.signOffs||[]).map(s =>
+          '<tr><td>' + esc(s.artifactTitle) + '</td><td>' + esc(s.signedBy) + '</td>' +
+          '<td style="font-size:10px;color:var(--text-3)">' + esc(s.role||'') + '</td>' +
+          '<td style="font-size:10px">' + fmtDate(s.at) + '</td></tr>'
+        ).join('')
+      : '<tr><td colspan="4" style="color:var(--text-3);font-size:10px">No sign-offs recorded yet.</td></tr>';
+
+    const artifactRows = latestArts.map(a =>
+      '<tr><td style="cursor:pointer;color:var(--accent)" onclick="openArtifact(\'' + esc(a.path||'').replace(/'/g,"\\'") + '\')">' + esc(a.title) + '</td>' +
+      '<td style="font-size:10px">' + esc(a.skill||'') + '</td>' +
+      '<td style="font-size:10px">v' + (a.version||1) + '</td>' +
+      '<td style="font-size:10px;color:var(--text-3)">' + esc(a.createdBy||'agent') + '</td>' +
+      '<td style="font-size:10px;color:var(--text-3)">' + fmtDate(a.createdAt||'') + '</td></tr>'
+    ).join('');
+
+    const stageColors = { ideation:'#8b5cf6', discovery:'#3b82f6', specification:'#f59e0b', design:'#10b981', delivery:'#c9980e', launch:'#ef4444' };
+    const stageColor = stageColors[d.project.stage] || '#6b7280';
+
+    container.innerHTML =
+      '<div class="dash-header">' +
+        '<div class="dash-project-name">' + esc(d.project.name) + '</div>' +
+        '<div class="dash-meta">' +
+          '<span class="dash-stage" style="background:' + stageColor + '22;color:' + stageColor + '">' + esc(d.project.stage) + '</span>' +
+          '<span class="dash-owner">Owner: ' + esc(d.project.owner||'') + '</span>' +
+          '<span class="dash-created">Created: ' + fmtDate(d.project.createdAt||'') + '</span>' +
+        '</div>' +
+        (d.project.description ? '<div class="dash-desc">' + esc(d.project.description) + '</div>' : '') +
+      '</div>' +
+
+      '<div class="dash-section-title">Team (' + (d.team||[]).length + ' members)</div>' +
+      '<table class="dash-table"><thead><tr><th>Email</th><th>Role</th><th>Added</th></tr></thead>' +
+      '<tbody>' + teamRows + '</tbody></table>' +
+
+      '<div class="dash-section-title">Key Decisions' +
+        '<button class="btn-ghost-sm dash-add-btn" id="addDecisionBtn" style="float:right">+ Add</button>' +
+      '</div>' +
+      '<table class="dash-table"><thead><tr><th>Decision</th><th>Outcome</th><th>By</th><th>Date</th></tr></thead>' +
+      '<tbody id="decisionRows">' + decisionRows + '</tbody></table>' +
+
+      '<div class="dash-section-title">Sign-offs' +
+        '<button class="btn-ghost-sm dash-add-btn" id="addSignOffBtn" style="float:right">+ Record</button>' +
+      '</div>' +
+      '<table class="dash-table"><thead><tr><th>Artifact</th><th>Signed By</th><th>Role</th><th>Date</th></tr></thead>' +
+      '<tbody>' + signOffRows + '</tbody></table>' +
+
+      '<div class="dash-section-title">Artifacts (' + arts.length + ' total, ' + latestArts.length + ' shown)</div>' +
+      '<table class="dash-table"><thead><tr><th>Artifact</th><th>Skill</th><th>Ver</th><th>Created By</th><th>Date</th></tr></thead>' +
+      '<tbody>' + artifactRows + '</tbody></table>';
+
+    // Wire add decision/sign-off
+    on2('#addDecisionBtn', 'click', openAddDecisionForm);
+    on2('#addSignOffBtn',  'click', openAddSignOffForm);
+  } catch(e) {
+    container.innerHTML = '<div style="padding:16px;color:#ef4444;font-size:11px">Error loading dashboard: ' + esc(e.message) + '</div>';
+  }
+}
+
+function on2(sel, evt, fn) { const el = document.querySelector(sel); if (el) el.addEventListener(evt, fn); }
+
+function openAddDecisionForm() {
+  const title = prompt('Decision title:');
+  if (!title) return;
+  const outcome = prompt('Outcome/decision made:') || '';
+  const by = currentUser || prompt('Your name/email:') || 'unknown';
+  api('/api/projects/' + currentProject.id + '/decisions', {
+    method:'POST', body: JSON.stringify({ title, outcome, decidedBy: by, description:'' })
+  }).then(() => loadDashboard()).catch(e => showToast('Error: ' + e.message));
+}
+
+function openAddSignOffForm() {
+  const art = prompt('Artifact title being signed off:');
+  if (!art) return;
+  const by = currentUser || prompt('Your name/email:') || 'unknown';
+  const role = prompt('Your role (optional):') || '';
+  api('/api/projects/' + currentProject.id + '/signoffs', {
+    method:'POST', body: JSON.stringify({ artifactTitle: art, signedBy: by, role, notes:'' })
+  }).then(() => loadDashboard()).catch(e => showToast('Error: ' + e.message));
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1168,6 +1401,18 @@ function wireEvents() {
   // ── Team ───────────────────────────────────────────────
   on('#addStakeBtn','click', addStakeholder);
   on('#stEmail',   'keydown', e => { if (e.key==='Enter') addStakeholder(); });
+
+  // ── Plan approval ──────────────────────────────────────
+  on('#approvePlanBtn', 'click', approvePlan);
+  on('#rejectPlanBtn',  'click', rejectPlan);
+  on('#resubmitPlanBtn','click', resubmitPlan);
+  on('#cancelRejectBtn','click', () => {
+    $('#planRejectBar').hidden=true;
+    showPlanApproval(pendingPlan);
+  });
+
+  // ── Skill Hub search ───────────────────────────────────
+  on('#skillSearchInput','input', e => renderSkillHub(window._allSkills||[], e.target.value));
 }
 
 document.addEventListener('DOMContentLoaded', boot);
