@@ -1,97 +1,261 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>nivi4AI — Collaborative Agentic Workspace</title>
-<link rel="stylesheet" href="styles.css" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>nivi4AI — Collaborative Workspace</title>
+<link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
+
+<!-- ═══════════════════════════════ TOPBAR ═══════════════════════════════ -->
 <header class="topbar">
-  <div class="brand"><span class="logo">KA</span> Collaborative Agentic Workspace
-    <span class="sub">Meta Agent → Project &amp; Product domain agents</span>
+  <div class="topbar-left">
+    <div class="logo-mark">N4</div>
+    <div class="topbar-title">
+      <span class="topbar-brand">nivi4AI</span>
+      <span class="topbar-sub">Collaborative Agentic Workspace</span>
+    </div>
   </div>
-  <div class="modepill" id="modepill">…</div>
+  <div class="topbar-center" id="topbarProject">
+    <span class="project-crumb" id="topbarProjectName">No project selected</span>
+    <span class="stage-badge" id="topbarStage" hidden></span>
+  </div>
+  <div class="topbar-right">
+    <!-- User switcher — persona selector for collaborative workflow -->
+    <div class="user-switcher" id="userSwitcher" hidden>
+      <div class="user-switcher-label">Acting as</div>
+      <div class="user-select-wrap">
+        <select id="currentUserSelect" class="user-select">
+          <option value="">Select user…</option>
+        </select>
+      </div>
+    </div>
+    <span class="mode-pill" id="modepill">…</span>
+    <button class="btn-ghost" id="newProjectBtn">+ New Project</button>
+  </div>
 </header>
 
-<div class="layout">
-  <aside class="sidebar">
-    <div class="side-head">Projects <button id="newProjectBtn" class="mini">+ New</button></div>
-    <ul id="projectList" class="projlist"></ul>
-    <div class="side-head" style="margin-top:18px">Skill registry</div>
-    <div id="skillList" class="skills"></div>
+<!-- ═══════════════════════════════ LAYOUT ═══════════════════════════════ -->
+<div class="workspace">
+
+  <!-- ─── LEFT SIDEBAR ─── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Projects</div>
+      <ul id="projectList" class="proj-list"></ul>
+    </div>
+    <div class="sidebar-section" style="margin-top:auto">
+      <div class="sidebar-label">Skill Registry <span id="skillCount" class="skill-count"></span></div>
+      <div id="skillList" class="skill-list"></div>
+    </div>
   </aside>
 
-  <main class="main" id="main">
-    <div class="empty" id="emptyState">
-      <h2>Create or pick a project to begin</h2>
-      <p>Add stakeholders by email, then ask the Super Agent to do the work — it routes to the
-      Project or Product domain agent and writes artifacts into the workspace.</p>
+  <!-- ─── CENTER: EXECUTION LOG ─── -->
+  <main class="center" id="center">
+
+    <!-- Empty state -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">🤖</div>
+      <h2>Super Agent ready</h2>
+      <p>Select a project or create a new one, then describe what you need.<br/>
+      The Super Agent will analyse your intent, decompose the work, invoke the right skills, and stream live progress.</p>
+      <button class="btn-primary" id="emptyNewProjectBtn">+ Create your first project</button>
     </div>
 
-    <section class="project" id="projectView" hidden>
-      <div class="phead">
-        <div>
-          <h1 id="pName"></h1>
-          <div class="pmeta"><span id="pStage" class="stage"></span><span id="pOwner" class="muted"></span></div>
+    <!-- Active project view -->
+    <div class="exec-view" id="execView" hidden>
+
+      <!-- Execution log (scrollable) -->
+      <div class="exec-log" id="execLog">
+        <div class="log-welcome" id="logWelcome">
+          <div class="log-welcome-icon">✦</div>
+          <div class="log-welcome-text">
+            <strong id="logProjectName"></strong>
+            <span id="logProjectDesc"></span>
+          </div>
         </div>
       </div>
 
-      <div class="grid">
-        <div class="col">
-          <div class="card">
-            <div class="card-h">Stakeholders</div>
-            <div class="stake-add">
-              <input id="stEmail" type="email" placeholder="name@hsbc.com" />
-              <select id="stRole">
-                <option value="product_owner">Product Owner</option>
-                <option value="business_analyst">Business Analyst</option>
-                <option value="project_manager">Project Manager</option>
-                <option value="reviewer">Reviewer / SME</option>
-                <option value="stakeholder">Stakeholder</option>
-              </select>
-              <button id="addStakeBtn">Add</button>
-            </div>
-            <ul id="stakeList" class="stakelist"></ul>
-          </div>
-
-          <div class="card">
-            <div class="card-h">Super Agent</div>
-            <div id="chat" class="chat"></div>
-            <div class="chat-in">
-              <textarea id="msg" rows="2" placeholder="e.g. Turn these workshop notes into user stories, then a sprint plan…"></textarea>
-              <button id="sendBtn">Send</button>
-            </div>
-            <div class="hints">
-              <button class="hint">Run market research for a mobile onboarding feature</button>
-              <button class="hint">Draft a PRD then user stories for it</button>
-              <button class="hint">Build a sprint plan and a plan on a page</button>
-            </div>
-          </div>
+      <!-- Input bar -->
+      <div class="input-bar">
+        <div class="input-wrap">
+          <textarea id="msgInput" rows="1" placeholder="Describe what you need… e.g. 'Run market research then write user stories for a mobile onboarding feature'" autocomplete="off"></textarea>
+          <button class="send-btn" id="sendBtn" title="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
         </div>
-
-        <div class="col">
-          <div class="card">
-            <div class="card-h">Workspace artifacts</div>
-            <ul id="artifactList" class="artlist"></ul>
-          </div>
-          <div class="card">
-            <div class="card-h">Activity &amp; notifications</div>
-            <ul id="activityList" class="activity"></ul>
-          </div>
+        <div class="prompt-chips" id="promptChips">
+          <button class="chip">Run market research for a mobile onboarding feature</button>
+          <button class="chip">Draft a PRD then break it into user stories</button>
+          <button class="chip">Build a sprint plan and a plan on a page</button>
+          <button class="chip">Write a project charter and RAID log</button>
         </div>
       </div>
-    </section>
+    </div>
   </main>
+
+  <!-- ─── RIGHT PANEL ─── -->
+  <aside class="right-panel" id="rightPanel" hidden>
+
+    <!-- Tab bar -->
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-tab="plan">Plan</button>
+      <button class="panel-tab" data-tab="outputs">Outputs</button>
+      <button class="panel-tab" data-tab="collab">Collab <span class="task-badge" id="collabBadge" hidden></span></button>
+      <button class="panel-tab" data-tab="team">Team</button>
+    </div>
+
+    <!-- Task Plan tab -->
+    <div class="panel-body" id="tabPlan">
+      <div class="panel-empty" id="planEmpty">
+        <p>The task plan will appear here when the Super Agent starts working.</p>
+      </div>
+      <div id="taskPlanList" class="task-plan-list" hidden></div>
+    </div>
+
+    <!-- Outputs tab -->
+    <div class="panel-body" id="tabOutputs" hidden>
+      <div class="panel-empty" id="outputsEmpty">
+        <p>Artifacts produced by the agents will appear here.</p>
+      </div>
+      <div id="artifactCards" class="artifact-cards" hidden></div>
+    </div>
+
+    <!-- Collab tab — My Tasks + Activity Log -->
+    <div class="panel-body" id="tabCollab" hidden>
+      <div class="collab-section-label">My Tasks</div>
+      <div id="myTasksEmpty" class="panel-empty" style="display:none">
+        <p>No items assigned to you. Switch persona to see another team member's tasks.</p>
+      </div>
+      <div id="myTasksList" class="my-tasks-list"></div>
+      <div class="collab-section-label" style="margin-top:12px">Activity</div>
+      <div id="activityLog" class="activity-log">
+        <div class="panel-empty"><p>Workflow activity will appear here.</p></div>
+      </div>
+    </div>
+
+    <!-- Team tab -->
+    <div class="panel-body" id="tabTeam" hidden>
+      <div class="stake-add-row">
+        <input id="stEmail" type="email" placeholder="colleague@company.com" class="stake-input"/>
+        <select id="stRole" class="stake-select">
+          <option value="product_owner">Product Owner</option>
+          <option value="business_analyst">Business Analyst</option>
+          <option value="project_manager">Project Manager</option>
+          <option value="reviewer">Reviewer / SME</option>
+          <option value="stakeholder">Stakeholder</option>
+        </select>
+        <button id="addStakeBtn" class="btn-secondary">Add</button>
+      </div>
+      <ul id="stakeList" class="stake-list"></ul>
+    </div>
+
+  </aside>
 </div>
 
-<div class="modal" id="modal" hidden>
-  <div class="modal-box">
-    <div class="modal-h"><span id="modalTitle"></span><button id="modalClose">✕</button></div>
-    <pre id="modalBody" class="md"></pre>
+<!-- ═══════════════════ NEW PROJECT MODAL ═══════════════════ -->
+<div class="modal-overlay" id="newProjectModal" hidden>
+  <div class="modal-card">
+    <div class="modal-header">
+      <span>New Project</span>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="field-label">Project name *</label>
+      <input id="npName" type="text" class="field-input" placeholder="e.g. HSBC SportsFlex Credit Card"/>
+      <label class="field-label">Description</label>
+      <textarea id="npDesc" class="field-input" rows="2" placeholder="Brief context for the Super Agent…"></textarea>
+      <label class="field-label">Your name / email</label>
+      <input id="npOwner" type="text" class="field-input" placeholder="you@company.com"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" id="cancelNewProject">Cancel</button>
+      <button class="btn-primary" id="createProjectBtn">Create Project</button>
+    </div>
   </div>
 </div>
 
+<!-- ═══════════════════ ARTIFACT VIEWER MODAL ═══════════════ -->
+<div class="modal-overlay" id="artifactModal" hidden>
+  <div class="modal-card modal-wide">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+        <span id="artifactModalTitle">Artifact</span>
+        <span class="modal-badge" id="artifactModalBadge"></span>
+        <!-- Workflow status badge -->
+        <span class="wf-status-badge" id="wfStatusBadge" hidden></span>
+      </div>
+      <div class="modal-header-actions">
+        <button class="btn-ghost-sm artifact-view-tab active" data-view="rendered" id="tabRendered">Rendered</button>
+        <button class="btn-ghost-sm artifact-view-tab" data-view="source" id="tabSource">Source</button>
+        <button class="btn-ghost-sm" id="copyArtifactBtn">Copy</button>
+        <!-- Assign for review button -->
+        <button class="btn-ghost-sm" id="assignArtifactBtn" hidden title="Assign this artifact to a team member for review or sign-off">
+          ↗ Assign
+        </button>
+        <button class="modal-close" id="artifactModalClose">✕</button>
+      </div>
+    </div>
+
+    <!-- Review panel — shown when current user has a task on this artifact -->
+    <div id="reviewPanel" class="review-panel" hidden>
+      <div class="review-panel-info" id="reviewPanelInfo"></div>
+      <div class="review-comments-prev" id="reviewCommentsPrev"></div>
+      <div class="review-actions">
+        <textarea id="reviewComment" class="field-input review-comment-box" rows="2" placeholder="Add a comment (optional)…"></textarea>
+        <div class="review-action-btns">
+          <button class="btn-approve" id="btnApprove">✅ Approve</button>
+          <button class="btn-changes" id="btnRequestChanges">🔄 Request Changes</button>
+          <button class="btn-reject" id="btnReject">❌ Reject</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rendered view -->
+    <div id="artifactRendered" class="artifact-rendered-body"></div>
+    <!-- Source view -->
+    <div id="artifactSource" class="modal-body artifact-body" hidden></div>
+    <!-- HTML prototype iframe -->
+    <iframe id="artifactIframe" class="artifact-iframe" hidden sandbox="allow-scripts"></iframe>
+  </div>
+</div>
+
+<!-- ═══════════════════ ASSIGN MODAL ═══════════════════════ -->
+<div class="modal-overlay" id="assignModal" hidden>
+  <div class="modal-card" style="max-width:420px">
+    <div class="modal-header">
+      <span>Assign for Review</span>
+      <button class="modal-close" id="assignModalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="assignArtifactName" class="assign-artifact-name"></div>
+      <label class="field-label">Assign to</label>
+      <select id="assignToSelect" class="field-input"></select>
+      <label class="field-label">Action required</label>
+      <select id="assignActionSelect" class="field-input">
+        <option value="review">Review &amp; comment</option>
+        <option value="signoff">Review &amp; sign-off</option>
+      </select>
+      <label class="field-label">Message (optional)</label>
+      <textarea id="assignMessage" class="field-input" rows="3" placeholder="Add context for the reviewer…"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" id="cancelAssignBtn">Cancel</button>
+      <button class="btn-primary" id="submitAssignBtn">Assign →</button>
+    </div>
+  </div>
+</div>
+
+<!-- marked.js for Markdown rendering -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<!-- mermaid.js for diagrams -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: false, theme: 'dark', darkMode: true,
+    themeVariables: { primaryColor: '#2563eb', background: '#161b22', mainBkg: '#1c2230', nodeBorder: '#30363d', clusterBkg: '#1c2230', titleColor: '#e6edf3', edgeLabelBackground: '#161b22', lineColor: '#8b949e' }
+  });
+</script>
 <script src="app.js"></script>
 </body>
 </html>
