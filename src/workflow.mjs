@@ -103,3 +103,48 @@ export function getActivityLog(pid, limit) {
   limit = limit || 40;
   return [...load(pid).log].reverse().slice(0, limit);
 }
+
+/** Add an inline comment to an artifact (optionally anchored to selected text) */
+export function addComment(pid, {
+  artifactId, itemId, author, anchorText, anchorSection, comment
+}) {
+  const wf = load(pid);
+  if (!wf.comments) wf.comments = [];
+  const cmt = {
+    id: 'cmt_' + crypto.randomUUID().slice(0, 6),
+    artifactId, itemId: itemId || null,
+    author,
+    anchorText: anchorText || '',
+    anchorSection: anchorSection || '',
+    comment,
+    timestamp: new Date().toISOString(),
+    resolved: false, resolvedBy: null, resolvedAt: null,
+  };
+  wf.comments.push(cmt);
+  wf.log.push({
+    type: 'commented', artifactId,
+    artifactTitle: (wf.items.find(i => i.artifactId === artifactId) || {}).artifactTitle || artifactId,
+    author, comment: comment.slice(0, 100), timestamp: cmt.timestamp,
+  });
+  save(pid, wf);
+  return cmt;
+}
+
+/** Resolve a comment */
+export function resolveComment(pid, commentId, resolvedBy) {
+  const wf = load(pid);
+  if (!wf.comments) return null;
+  const cmt = wf.comments.find(c => c.id === commentId);
+  if (!cmt) throw new Error('Comment not found: ' + commentId);
+  cmt.resolved = true;
+  cmt.resolvedBy = resolvedBy;
+  cmt.resolvedAt = new Date().toISOString();
+  save(pid, wf);
+  return cmt;
+}
+
+/** Get all comments for a specific artifact */
+export function getArtifactComments(pid, artifactId) {
+  const wf = load(pid);
+  return (wf.comments || []).filter(c => c.artifactId === artifactId);
+}

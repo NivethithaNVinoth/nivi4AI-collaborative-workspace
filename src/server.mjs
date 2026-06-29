@@ -5,11 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { MODE, MODEL } from './anthropic.mjs';
 import { loadSkills, DOMAINS } from './skills.mjs';
 import { listProjects, getProject, createProject, addStakeholder, removeStakeholder } from './store.mjs';
-import { listArtifacts, readArtifact } from './workspace.mjs';
+import { listArtifacts, readArtifact, listSessions } from './workspace.mjs';
 import { runSuperAgent } from './superAgent.mjs';
 import {
   assignArtifact, submitReview, getWorkflow,
   getMyTasks, getItemByArtifact,
+  addComment, resolveComment, getArtifactComments,
 } from './workflow.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -57,101 +58,75 @@ app.delete('/api/projects/:id/stakeholders/:email', wrap((req, res) =>
 // ── artifacts ──────────────────────────────────────────────
 app.get('/api/projects/:id/artifacts', wrap((req, res) => res.json(listArtifacts(req.params.id))));
 
+app.get('/api/projects/:id/sessions', wrap((req, res) => res.json(listSessions(req.params.id))));
+
 app.get('/api/projects/:id/artifact', wrap((req, res) => {
   const rel = req.query.path;
   if (!rel) return res.status(400).json({ error: 'path required' });
-  res.type('text/markdown').send(readArtifact(req.params.id, String(rel)));
+  const content = readArtifact(req.params.id, rel);
+  res.type('text/plain').send(content);
 }));
 
-// ── invoke (legacy — returns full JSON, no streaming) ──────
-app.post('/api/projects/:id/invoke', wrap(async (req, res) => {
+// ── streaming invoke ───────────────────────────────────────
+app.post('/api/projects/:id/invoke-stream', (req, res) => {
   const { message } = req.body || {};
   if (!message) return res.status(400).json({ error: 'message required' });
-  const result = await runSuperAgent({ projectId: req.params.id, message });
-  res.json(result);
-}));
 
-// ── invoke-stream (SSE) — real-time events ─────────────────
-app.post('/api/projects/:id/invoke-stream', async (req, res) => {
-  const { message } = req.body || {};
-  if (!message) { res.status(400).json({ error: 'message required' }); return; }
-
-  // Set up SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
   res.flushHeaders();
 
-  const send = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  };
+  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
-  // Heartbeat to keep connection alive
-  const hb = setInterval(() => res.write(': heartbeat\n\n'), 15000);
-
-  try {
-    await runSuperAgent({
-      projectId: req.params.id,
-      message,
-      onEvent: (type, data) => send(type, data),
-    });
-  } catch (e) {
-    console.error('invoke-stream error:', e);
-    send('error', { message: e.message });
-  } finally {
-    clearInterval(hb);
-    res.end();
-  }
+  runSuperAgent({ projectId: req.params.id, message, onEvent: send })
+    .catch(e => { send('error', { message: e.message }); })
+    .finally(() => res.end());
 });
 
-// ── workflow ────────────────────────────────────────────────
-// GET  /api/projects/:id/workflow            — full workflow state
-// POST /api/projects/:id/workflow/assign     — assign artifact for review/signoff
-// POST /api/projects/:id/workflow/review     — submit review decision
-// GET  /api/projects/:id/workflow/mytasks    — items assigned to ?email=
-// GET  /api/projects/:id/workflow/artifact/:artId — item for specific artifact
-
-app.get('/api/projects/:id/workflow', wrap((req, res) => {
-  res.json(getWorkflow(req.params.id));
-}));
+// ── workflow ───────────────────────────────────────────────
+app.get('/api/projects/:id/workflow', wrap((req, res) => res.json(getWorkflow(req.params.id))));
 
 app.get('/api/projects/:id/workflow/mytasks', wrap((req, res) => {
-  const email = req.query.email || '';
+  const email = req.query.email;
+  if (!email) return res.status(400).json({ error: 'email required' });
   res.json(getMyTasks(req.params.id, email));
 }));
 
 app.get('/api/projects/:id/workflow/artifact/:artId', wrap((req, res) => {
-  const item = getItemByArtifact(req.params.id, req.params.artId);
+  const item = getItemByArtifact(req.params.id, decodeURIComponent(req.params.artId));
   res.json(item || null);
 }));
 
 app.post('/api/projects/:id/workflow/assign', wrap((req, res) => {
-  const { artifactId, artifactTitle, artifactPath, domain, skill,
-          assignedTo, assignedBy, action, message } = req.body || {};
-  if (!artifactId || !assignedTo || !assignedBy) {
-    return res.status(400).json({ error: 'artifactId, assignedTo, assignedBy required' });
-  }
-  const item = assignArtifact(req.params.id, {
-    artifactId, artifactTitle, artifactPath, domain, skill,
-    assignedTo, assignedBy, action: action || 'review', message,
-  });
-  res.json(item);
+  const { artifactId, artifactTitle, artifactPath, domain, skill, assignedTo, assignedBy, action, message } = req.body || {};
+  if (!artifactId || !assignedTo || !assignedBy) return res.status(400).json({ error: 'artifactId, assignedTo, assignedBy required' });
+  res.json(assignArtifact(req.params.id, { artifactId, artifactTitle, artifactPath, domain, skill, assignedTo, assignedBy, action: action || 'review', message }));
 }));
 
 app.post('/api/projects/:id/workflow/review', wrap((req, res) => {
   const { itemId, author, decision, comment } = req.body || {};
-  if (!itemId || !author || !decision) {
-    return res.status(400).json({ error: 'itemId, author, decision required' });
-  }
-  const item = submitReview(req.params.id, { itemId, author, decision, comment });
-  res.json(item);
+  if (!itemId || !author || !decision) return res.status(400).json({ error: 'itemId, author, decision required' });
+  res.json(submitReview(req.params.id, { itemId, author, decision, comment }));
 }));
 
-// ── boot ───────────────────────────────────────────────────
+// ── comments ───────────────────────────────────────────────
+app.get('/api/projects/:id/workflow/comments/:artId', wrap((req, res) => {
+  res.json(getArtifactComments(req.params.id, decodeURIComponent(req.params.artId)));
+}));
+
+app.post('/api/projects/:id/workflow/comment', wrap((req, res) => {
+  const { artifactId, itemId, author, anchorText, comment } = req.body || {};
+  if (!artifactId || !author || !comment) return res.status(400).json({ error: 'artifactId, author, comment required' });
+  res.json(addComment(req.params.id, { artifactId, itemId, author, anchorText: anchorText || '', comment }));
+}));
+
+app.post('/api/projects/:id/workflow/comment/:cmtId/resolve', wrap((req, res) => {
+  const { resolvedBy } = req.body || {};
+  if (!resolvedBy) return res.status(400).json({ error: 'resolvedBy required' });
+  res.json(resolveComment(req.params.id, req.params.cmtId, resolvedBy));
+}));
+
+// ── start ──────────────────────────────────────────────────
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`\n  nivi4AI — Collaborative Agentic Workspace`);
-  console.log(`  http://localhost:${PORT}   mode=${MODE}  model=${MODEL}`);
-  console.log(`  ${MODE === 'MOCK' ? 'MOCK mode — fully demoable without an API key.' : 'LIVE — Claude orchestration active.'}\n`);
-});
+app.listen(PORT, () => console.log(`nivi4AI server · ${MODE} mode · http://localhost:${PORT}`));

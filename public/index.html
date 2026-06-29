@@ -8,7 +8,7 @@
 </head>
 <body>
 
-<!-- ═══════════════════════════════ TOPBAR ═══════════════════════════════ -->
+<!-- ═══════════════════════ TOPBAR ═══════════════════════════════ -->
 <header class="topbar">
   <div class="topbar-left">
     <div class="logo-mark">N4</div>
@@ -22,21 +22,18 @@
     <span class="stage-badge" id="topbarStage" hidden></span>
   </div>
   <div class="topbar-right">
-    <!-- User switcher — persona selector for collaborative workflow -->
     <div class="user-switcher" id="userSwitcher" hidden>
       <div class="user-switcher-label">Acting as</div>
-      <div class="user-select-wrap">
-        <select id="currentUserSelect" class="user-select">
-          <option value="">Select user…</option>
-        </select>
-      </div>
+      <select id="currentUserSelect" class="user-select">
+        <option value="">Select user…</option>
+      </select>
     </div>
     <span class="mode-pill" id="modepill">…</span>
     <button class="btn-ghost" id="newProjectBtn">+ New Project</button>
   </div>
 </header>
 
-<!-- ═══════════════════════════════ LAYOUT ═══════════════════════════════ -->
+<!-- ═══════════════════════ LAYOUT ═══════════════════════════════ -->
 <div class="workspace">
 
   <!-- ─── LEFT SIDEBAR ─── -->
@@ -53,8 +50,6 @@
 
   <!-- ─── CENTER: EXECUTION LOG ─── -->
   <main class="center" id="center">
-
-    <!-- Empty state -->
     <div class="empty-state" id="emptyState">
       <div class="empty-icon">🤖</div>
       <h2>Super Agent ready</h2>
@@ -62,11 +57,7 @@
       The Super Agent will analyse your intent, decompose the work, invoke the right skills, and stream live progress.</p>
       <button class="btn-primary" id="emptyNewProjectBtn">+ Create your first project</button>
     </div>
-
-    <!-- Active project view -->
     <div class="exec-view" id="execView" hidden>
-
-      <!-- Execution log (scrollable) -->
       <div class="exec-log" id="execLog">
         <div class="log-welcome" id="logWelcome">
           <div class="log-welcome-icon">✦</div>
@@ -76,8 +67,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Input bar -->
       <div class="input-bar">
         <div class="input-wrap">
           <textarea id="msgInput" rows="1" placeholder="Describe what you need… e.g. 'Run market research then write user stories for a mobile onboarding feature'" autocomplete="off"></textarea>
@@ -86,10 +75,12 @@
           </button>
         </div>
         <div class="prompt-chips" id="promptChips">
-          <button class="chip">Run market research for a mobile onboarding feature</button>
-          <button class="chip">Draft a PRD then break it into user stories</button>
-          <button class="chip">Build a sprint plan and a plan on a page</button>
-          <button class="chip">Write a project charter and RAID log</button>
+          <button class="chip">Run market research and JTBD analysis for a new product</button>
+          <button class="chip">Write a business case and executive summary for leadership approval</button>
+          <button class="chip">Generate a swimlane diagram and process flow for onboarding</button>
+          <button class="chip">Draft OKRs, a PRD, and user stories for the quarter</button>
+          <button class="chip">Build a sprint plan, RAID log, and stakeholder map</button>
+          <button class="chip">Write a change request and escalation brief</button>
         </div>
       </div>
     </div>
@@ -97,45 +88,27 @@
 
   <!-- ─── RIGHT PANEL ─── -->
   <aside class="right-panel" id="rightPanel" hidden>
-
-    <!-- Tab bar -->
     <div class="panel-tabs">
       <button class="panel-tab active" data-tab="plan">Plan</button>
       <button class="panel-tab" data-tab="outputs">Outputs</button>
       <button class="panel-tab" data-tab="collab">Collab <span class="task-badge" id="collabBadge" hidden></span></button>
       <button class="panel-tab" data-tab="team">Team</button>
     </div>
-
-    <!-- Task Plan tab -->
     <div class="panel-body" id="tabPlan">
-      <div class="panel-empty" id="planEmpty">
-        <p>The task plan will appear here when the Super Agent starts working.</p>
-      </div>
+      <div class="panel-empty" id="planEmpty"><p>The task plan will appear here when the Super Agent starts working.</p></div>
       <div id="taskPlanList" class="task-plan-list" hidden></div>
     </div>
-
-    <!-- Outputs tab -->
     <div class="panel-body" id="tabOutputs" hidden>
-      <div class="panel-empty" id="outputsEmpty">
-        <p>Artifacts produced by the agents will appear here.</p>
-      </div>
+      <div class="panel-empty" id="outputsEmpty"><p>Artifacts produced by the agents will appear here.</p></div>
       <div id="artifactCards" class="artifact-cards" hidden></div>
     </div>
-
-    <!-- Collab tab — My Tasks + Activity Log -->
     <div class="panel-body" id="tabCollab" hidden>
       <div class="collab-section-label">My Tasks</div>
-      <div id="myTasksEmpty" class="panel-empty" style="display:none">
-        <p>No items assigned to you. Switch persona to see another team member's tasks.</p>
-      </div>
+      <div id="myTasksEmpty" class="panel-empty" style="display:none"><p>No items assigned to you.</p></div>
       <div id="myTasksList" class="my-tasks-list"></div>
       <div class="collab-section-label" style="margin-top:12px">Activity</div>
-      <div id="activityLog" class="activity-log">
-        <div class="panel-empty"><p>Workflow activity will appear here.</p></div>
-      </div>
+      <div id="activityLog" class="activity-log"><div class="panel-empty"><p>Workflow activity will appear here.</p></div></div>
     </div>
-
-    <!-- Team tab -->
     <div class="panel-body" id="tabTeam" hidden>
       <div class="stake-add-row">
         <input id="stEmail" type="email" placeholder="colleague@company.com" class="stake-input"/>
@@ -150,7 +123,6 @@
       </div>
       <ul id="stakeList" class="stake-list"></ul>
     </div>
-
   </aside>
 </div>
 
@@ -176,29 +148,27 @@
   </div>
 </div>
 
-<!-- ═══════════════════ ARTIFACT VIEWER MODAL ═══════════════ -->
+<!-- ═══════════════════ ARTIFACT VIEWER MODAL ══════════════════ -->
 <div class="modal-overlay" id="artifactModal" hidden>
-  <div class="modal-card modal-wide">
+  <div class="modal-card modal-wide modal-with-comments" id="artifactModalCard">
+    <!-- Modal header -->
     <div class="modal-header">
       <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
         <span id="artifactModalTitle">Artifact</span>
         <span class="modal-badge" id="artifactModalBadge"></span>
-        <!-- Workflow status badge -->
         <span class="wf-status-badge" id="wfStatusBadge" hidden></span>
       </div>
       <div class="modal-header-actions">
         <button class="btn-ghost-sm artifact-view-tab active" data-view="rendered" id="tabRendered">Rendered</button>
         <button class="btn-ghost-sm artifact-view-tab" data-view="source" id="tabSource">Source</button>
+        <button class="btn-ghost-sm" id="toggleCommentsBtn" title="Show/hide review comments">💬 Comments <span id="commentCount" class="cmt-count-badge" hidden></span></button>
         <button class="btn-ghost-sm" id="copyArtifactBtn">Copy</button>
-        <!-- Assign for review button -->
-        <button class="btn-ghost-sm" id="assignArtifactBtn" hidden title="Assign this artifact to a team member for review or sign-off">
-          ↗ Assign
-        </button>
+        <button class="btn-ghost-sm" id="assignArtifactBtn" hidden>↗ Assign</button>
         <button class="modal-close" id="artifactModalClose">✕</button>
       </div>
     </div>
 
-    <!-- Review panel — shown when current user has a task on this artifact -->
+    <!-- Review panel (when assigned to current user) -->
     <div id="reviewPanel" class="review-panel" hidden>
       <div class="review-panel-info" id="reviewPanelInfo"></div>
       <div class="review-comments-prev" id="reviewCommentsPrev"></div>
@@ -212,12 +182,49 @@
       </div>
     </div>
 
-    <!-- Rendered view -->
-    <div id="artifactRendered" class="artifact-rendered-body"></div>
-    <!-- Source view -->
-    <div id="artifactSource" class="modal-body artifact-body" hidden></div>
-    <!-- HTML prototype iframe -->
-    <iframe id="artifactIframe" class="artifact-iframe" hidden sandbox="allow-scripts"></iframe>
+    <!-- Content + Comments side-by-side -->
+    <div class="artifact-content-row">
+      <!-- Main content area -->
+      <div class="artifact-content-area" id="artifactContentArea">
+        <div id="artifactRendered" class="artifact-rendered-body"></div>
+        <div id="artifactSource" class="modal-body artifact-body" hidden></div>
+        <iframe id="artifactIframe" class="artifact-iframe" hidden sandbox="allow-scripts"></iframe>
+      </div>
+
+      <!-- Comments panel (slides in) -->
+      <div class="comments-panel" id="commentsPanel" hidden>
+        <div class="comments-panel-header">
+          <span class="comments-panel-title">Review Comments</span>
+          <button class="btn-ghost-sm" id="addGeneralCommentBtn">+ Add</button>
+        </div>
+
+        <!-- Add comment form (general / inline) -->
+        <div class="add-comment-form" id="addCommentForm" hidden>
+          <div class="add-comment-anchor" id="addCommentAnchor" hidden>
+            <span class="anchor-label">On:</span>
+            <span class="anchor-text" id="addCommentAnchorText"></span>
+          </div>
+          <textarea id="addCommentText" class="field-input comment-input" rows="3" placeholder="Your comment…"></textarea>
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button class="btn-primary" style="font-size:11px;padding:5px 12px" id="submitCommentBtn">Post</button>
+            <button class="btn-ghost" style="font-size:11px;padding:5px 10px" id="cancelCommentBtn">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Comments list -->
+        <div class="comments-list" id="commentsList">
+          <div class="panel-empty" style="font-size:11px;padding:16px 0;text-align:center;color:var(--text-3)">
+            No comments yet. Select text to comment on a specific section, or click + Add for a general comment.
+          </div>
+        </div>
+
+        <!-- Refine with AI -->
+        <div class="refine-bar" id="refineBar" hidden>
+          <button class="btn-refine" id="refineWithAIBtn">✨ Refine with AI using all comments</button>
+          <div class="refine-hint">Sends all comments as context to produce a revised artifact</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -247,13 +254,18 @@
   </div>
 </div>
 
+<!-- Floating inline comment button (appears on text selection) -->
+<div id="floatingCommentBtn" class="floating-comment-btn" hidden>
+  💬 Comment on selection
+</div>
+
 <!-- marked.js for Markdown rendering -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <!-- mermaid.js for diagrams -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
 <script>
   mermaid.initialize({ startOnLoad: false, theme: 'dark', darkMode: true,
-    themeVariables: { primaryColor: '#2563eb', background: '#161b22', mainBkg: '#1c2230', nodeBorder: '#30363d', clusterBkg: '#1c2230', titleColor: '#e6edf3', edgeLabelBackground: '#161b22', lineColor: '#8b949e' }
+    themeVariables: { primaryColor: '#2563eb', background: '#161b22', mainBkg: '#1c2230', nodeBorder: '#30363d', titleColor: '#e6edf3', edgeLabelBackground: '#161b22', lineColor: '#8b949e' }
   });
 </script>
 <script src="app.js"></script>

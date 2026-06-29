@@ -41,7 +41,7 @@ export function loadSkills() {
       skills.push({
         id: `${domain}/${meta.name || skillName}`,
         name: meta.name || skillName,
-        domain, // 'product-management' | 'project-management'
+        domain,
         description: meta.description || '',
         when_to_use: meta.when_to_use || '',
         retrieval_intent: meta.retrieval_intent || '',
@@ -71,6 +71,7 @@ export function skillCatalogue() {
 }
 
 export const DOMAINS = {
-  'project-management': 'Project Management — delivery lifecycle: charter, planning, sprints, RAID, status, closure.',
-  'product-management': 'Product Management — discovery & definition: market research, PRDs, user stories, roadmap, prioritisation.',
+  'project-management': 'Project Management -- delivery lifecycle: charter, planning, sprints, RAID, status, closure.',
+  'product-management': 'Product Management -- discovery & definition: market research, PRDs, user stories, roadmap, prioritisation.',
+  'diagramming': 'Diagramming -- draw.io XML diagrams: process flows, swimlanes, journey maps, architecture, timelines. Includes HSBC Red theme.',
 };
